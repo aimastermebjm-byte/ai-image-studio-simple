@@ -7,6 +7,7 @@ export default function Home() {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [model, setModel] = useState('openai'); // openai, stability, replicate
   const [quality, setQuality] = useState('standard');
   const [canRequest, setCanRequest] = useState(true);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
@@ -59,147 +60,80 @@ export default function Home() {
     setCanRequest(false);
 
     try {
-      // Add longer delay to prevent rapid requests
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Add delay to prevent rapid requests
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Use Z.AI CogView-4 API for image generation
-      const response = await fetch('https://api.z.ai/api/paas/v4/images/generations', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'cogview-4-250304',
-          prompt: prompt,
-          size: '1024x1024',
-          quality: quality
-        }),
-      });
+      let response;
+      let data;
 
-      if (response.status === 429) {
-        const data = await response.json();
-        const businessCode = data.error?.code;
-        let errorMessage = 'Rate limit exceeded. ';
+      if (model === 'openai') {
+        // Use OpenAI DALL-E 3 API
+        response = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt: prompt,
+            n: 1,
+            size: '1024x1024',
+            quality: quality
+          }),
+        });
 
-        if (businessCode === '1302') {
-          errorMessage += 'High concurrency usage. CogView-4 has limit of 5 requests. Please wait 60 seconds.';
-        } else if (businessCode === '1303') {
-          errorMessage += 'High frequency usage. Please wait 60 seconds before trying again.';
-        } else if (businessCode === '1304') {
-          errorMessage += 'Daily call limit reached. Please try again tomorrow.';
-          setCooldownSeconds(3600); // 1 hour for daily limit
-        } else if (businessCode === '1308') {
-          errorMessage += 'Usage limit reached. Please wait before trying again.';
-        } else if (businessCode === '1309') {
-          errorMessage += 'GLM Coding Plan expired. Please renew at https://z.ai/subscribe';
-        } else {
-          errorMessage += 'CogView-4 has concurrency limit of 5 requests. Please wait 60 seconds.';
+        if (response.status === 429) {
+          setResult('Rate limit exceeded. Please wait 60 seconds before trying again.');
+          setCooldownSeconds(60);
+          const countdown = setInterval(() => {
+            setCooldownSeconds((prev) => {
+              if (prev <= 1) {
+                clearInterval(countdown);
+                setCanRequest(true);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          return;
         }
 
-        setResult(errorMessage);
-        // Start countdown timer
-        const cooldownTime = businessCode === '1304' ? 3600 : 60;
-        setCooldownSeconds(cooldownTime);
-        const countdown = setInterval(() => {
-          setCooldownSeconds((prev) => {
-            if (prev <= 1) {
-              clearInterval(countdown);
-              setCanRequest(true);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-        return;
-      }
-
-      if (response.status === 401) {
-        const data = await response.json();
-        const businessCode = data.error?.code;
-        let errorMessage = 'Authentication error. ';
-
-        if (businessCode === '1002') {
-          errorMessage += 'Authorization Token is invalid. Please check your API key.';
-        } else if (businessCode === '1003') {
-          errorMessage += 'Authorization Token expired. Please get a new API key.';
-        } else if (businessCode === '1113') {
-          errorMessage += 'Account is in arrears. Please recharge at https://z.ai/subscribe';
-        } else {
-          errorMessage += 'Invalid API key. Please check your Z.AI API key.';
+        if (!response.ok) {
+          const errorData = await response.json();
+          setResult(`OpenAI Error: ${errorData.error?.message || 'API request failed'}`);
+          setCanRequest(true);
+          return;
         }
 
-        setResult(errorMessage);
-        setCanRequest(true); // Allow retry with correct API key
-        return;
-      }
-
-      if (response.status === 400) {
-        const data = await response.json();
-        const businessCode = data.error?.code;
-        let errorMessage = 'Parameter error. ';
-
-        if (businessCode === '1214') {
-          errorMessage += data.error.message || 'Invalid parameter provided.';
+        data = await response.json();
+        if (data.data && data.data[0] && data.data[0].url) {
+          setResult(data.data[0].url);
+          setCooldownSeconds(10);
         } else {
-          errorMessage += 'Please check your input parameters.';
+          setResult('Failed to generate image with OpenAI DALL-E 3');
+          setCanRequest(true);
+          return;
         }
 
-        setResult(errorMessage);
-        setCanRequest(true); // Allow retry for parameter errors
-        return;
-      }
-
-      if (!response.ok) {
-        setResult(`API Error: ${response.status} - ${response.statusText}`);
-        setCanRequest(true); // Allow retry for other errors
-        return;
-      }
-
-      const data = await response.json();
-      console.log('API Response:', data); // Debug log
-
-      // Check for business errors even with 200 status
-      if (data.error) {
-        const businessCode = data.error.code;
-        let errorMessage = '';
-
-        if (businessCode === '1301') {
-          errorMessage = 'Content blocked: System detected potentially unsafe or sensitive content. Please modify your prompt.';
-        } else if (businessCode === '1300') {
-          errorMessage = 'API call blocked by policy. Please try a different approach.';
-        } else if (businessCode === '1221') {
-          errorMessage = 'CogView-4 API has been taken offline or is not available with your current plan.';
-        } else if (businessCode === '1220') {
-          errorMessage = 'You do not have permission to access CogView-4 image generation API. Please check your subscription plan.';
-        } else {
-          errorMessage = `Error: ${data.error.message} (Code: ${businessCode})`;
-        }
-
-        setResult(errorMessage);
-        setCanRequest(true); // Allow retry for content policy errors
-        return;
-      }
-
-      if (data.data && data.data[0] && data.data[0].url) {
-        // Return image URL from Z.AI CogView-4
-        setResult(data.data[0].url);
-        // Add 15 second delay after successful generation to prevent rate limit
-        setCooldownSeconds(15);
-        const countdown = setInterval(() => {
-          setCooldownSeconds((prev) => {
-            if (prev <= 1) {
-              clearInterval(countdown);
-              setCanRequest(true);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
       } else {
-        setResult('Failed to generate image: ' + (data.error?.message || 'No image URL in response'));
-        setCanRequest(true); // Allow retry for failed generation
+        // Fallback to other APIs or error
+        setResult(`${model.toUpperCase()} API not implemented yet. Please use OpenAI.`);
+        setCanRequest(true);
+        return;
       }
+
+      // Start countdown timer after successful generation
+      const countdown = setInterval(() => {
+        setCooldownSeconds((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdown);
+            setCanRequest(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (error) {
       console.error('Error:', error);
       setResult('Error generating image. Please check your API key.');
@@ -219,13 +153,30 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow-xl p-6 space-y-6">
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Your Z.AI API Key
+              AI Model Provider
+            </label>
+            <select
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="openai">OpenAI DALL-E 3 (Recommended)</option>
+              <option value="zai" disabled>Z.AI CogView-4 (Not Working)</option>
+            </select>
+            <p className="text-xs text-gray-500">
+              OpenAI provides reliable image generation with consistent results
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Your {model === 'openai' ? 'OpenAI' : 'Z.AI'} API Key
             </label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your Z.AI API key..."
+              placeholder={`Enter your ${model === 'openai' ? 'OpenAI' : 'Z.AI'} API key...`}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <div className="flex gap-2">
@@ -236,8 +187,12 @@ export default function Home() {
               >
                 Test API Key
               </button>
-              <a href="https://z.ai" target="_blank" className="text-xs text-blue-500 hover:underline">
-                Get API key
+              <a
+                href={model === 'openai' ? 'https://platform.openai.com/api-keys' : 'https://z.ai'}
+                target="_blank"
+                className="text-xs text-blue-500 hover:underline"
+              >
+                Get {model === 'openai' ? 'OpenAI' : 'Z.AI'} API key
               </a>
             </div>
             {apiTestResult && (
@@ -302,10 +257,10 @@ export default function Home() {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>AI Image Studio Pro - Generate images with Z.AI CogView-4</p>
-          <p>High-quality bilingual (Chinese/English) image generation</p>
-          <p className="mt-2 text-xs">⚡ 15 second cooldown between generations to prevent rate limits</p>
-          <p className="text-xs">Concurrency limit: 5 requests for CogView-4-250304</p>
+          <p>AI Image Studio Pro - Generate images with multiple AI models</p>
+          <p>Professional image generation with OpenAI DALL-E 3 and more</p>
+          <p className="mt-2 text-xs">⚡ 10 second cooldown between generations to prevent rate limits</p>
+          <p className="text-xs">Using your own API key - pay only for what you use</p>
         </div>
       </div>
     </div>
