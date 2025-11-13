@@ -18,26 +18,26 @@ export default function Home() {
     setResult('');
 
     try {
-      // Use Imagen 4.0 for actual image generation
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=' + apiKey, {
+      // Use Z.AI API for image generation
+      const response = await fetch('https://api.z.ai/v1/images/generations', {
         method: 'POST',
         headers: {
+          'Authorization': 'Bearer ' + apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          instances: [{
-            prompt: prompt
-          }],
-          parameters: {
-            sampleCount: 1
-          }
+          prompt: prompt,
+          model: 'z-ai-image-generator',
+          n: 1,
+          size: '1024x1024',
+          quality: 'standard'
         }),
       });
 
       const data = await response.json();
-      if (data.predictions && data.predictions[0]) {
-        // Return base64 image data
-        setResult(data.predictions[0].generatedImage);
+      if (data.data && data.data[0] && data.data[0].url) {
+        // Return image URL from Z.AI
+        setResult(data.data[0].url);
       } else {
         setResult('Failed to generate image');
       }
@@ -59,17 +59,17 @@ export default function Home() {
         <div className="bg-white rounded-lg shadow-xl p-6 space-y-6">
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Your Gemini API Key
+              Your Z.AI API Key
             </label>
             <input
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Enter your Gemini API key..."
+              placeholder="Enter your Z.AI API key..."
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             <p className="text-xs text-gray-500">
-              Get your API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" className="text-blue-500 hover:underline">Google AI Studio</a>
+              Get your API key from <a href="https://z.ai" target="_blank" className="text-blue-500 hover:underline">Z.AI Platform</a>
             </p>
           </div>
 
@@ -111,7 +111,7 @@ export default function Home() {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>AI Image Studio Pro - Generate images with Google Gemini API</p>
+          <p>AI Image Studio Pro - Generate images with Z.AI API</p>
           <p>Free forever with your own API key</p>
         </div>
       </div>
