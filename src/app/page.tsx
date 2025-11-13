@@ -10,6 +10,38 @@ export default function Home() {
   const [quality, setQuality] = useState('standard');
   const [canRequest, setCanRequest] = useState(true);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  const [apiTestResult, setApiTestResult] = useState('');
+
+  const testApiKey = async () => {
+    if (!apiKey.trim()) {
+      setApiTestResult('Please enter API key first');
+      return;
+    }
+
+    try {
+      const response = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'glm-4-flash',
+          messages: [{ role: 'user', content: 'test' }]
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setApiTestResult('✅ API Key is valid and has text generation access');
+      } else {
+        const data = await response.json();
+        setApiTestResult(`❌ API Key test failed: ${data.error?.message || 'Invalid key'}`);
+      }
+    } catch (error) {
+      setApiTestResult(`❌ Network error: ${error.message}`);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !apiKey.trim()) {
@@ -125,6 +157,7 @@ export default function Home() {
       }
 
       const data = await response.json();
+      console.log('API Response:', data); // Debug log
 
       // Check for business errors even with 200 status
       if (data.error) {
@@ -135,8 +168,12 @@ export default function Home() {
           errorMessage = 'Content blocked: System detected potentially unsafe or sensitive content. Please modify your prompt.';
         } else if (businessCode === '1300') {
           errorMessage = 'API call blocked by policy. Please try a different approach.';
+        } else if (businessCode === '1221') {
+          errorMessage = 'CogView-4 API has been taken offline or is not available with your current plan.';
+        } else if (businessCode === '1220') {
+          errorMessage = 'You do not have permission to access CogView-4 image generation API. Please check your subscription plan.';
         } else {
-          errorMessage = `Error: ${data.error.message}`;
+          errorMessage = `Error: ${data.error.message} (Code: ${businessCode})`;
         }
 
         setResult(errorMessage);
@@ -191,9 +228,23 @@ export default function Home() {
               placeholder="Enter your Z.AI API key..."
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-            <p className="text-xs text-gray-500">
-              Get your API key from <a href="https://z.ai" target="_blank" className="text-blue-500 hover:underline">Z.AI Platform</a>
-            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={testApiKey}
+                className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+              >
+                Test API Key
+              </button>
+              <a href="https://z.ai" target="_blank" className="text-xs text-blue-500 hover:underline">
+                Get API key
+              </a>
+            </div>
+            {apiTestResult && (
+              <p className="text-xs p-2 rounded bg-gray-50" style={{ color: apiTestResult.includes('✅') ? '#059669' : '#dc2626' }}>
+                {apiTestResult}
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
