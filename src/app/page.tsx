@@ -18,28 +18,26 @@ export default function Home() {
     setResult('');
 
     try {
-      // Use Z.AI API for image generation
-      const response = await fetch('https://api.z.ai/v1/images/generations', {
+      // Use Z.AI CogView-4 API for image generation
+      const response = await fetch('https://api.z.ai/api/paas/v4/images/generations', {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer ' + apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          model: 'cogView-4-250304',
           prompt: prompt,
-          model: 'z-ai-image-generator',
-          n: 1,
-          size: '1024x1024',
-          quality: 'standard'
+          size: '1024x1024'
         }),
       });
 
       const data = await response.json();
-      if (data.data && data.data[0] && data.data[0].url) {
-        // Return image URL from Z.AI
-        setResult(data.data[0].url);
+      if (data.image_url) {
+        // Return image URL from Z.AI CogView-4
+        setResult(data.image_url);
       } else {
-        setResult('Failed to generate image');
+        setResult('Failed to generate image: ' + (data.error?.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error:', error);
@@ -111,8 +109,8 @@ export default function Home() {
         </div>
 
         <div className="mt-8 text-center text-sm text-gray-500">
-          <p>AI Image Studio Pro - Generate images with Z.AI API</p>
-          <p>Free forever with your own API key</p>
+          <p>AI Image Studio Pro - Generate images with Z.AI CogView-4</p>
+          <p>High-quality bilingual (Chinese/English) image generation</p>
         </div>
       </div>
     </div>
