@@ -46,9 +46,29 @@ export default function Home() {
       });
 
       if (response.status === 429) {
-        setResult('Rate limit exceeded. CogView-4 has concurrency limit of 5 requests. Please wait 60 seconds before trying again.');
+        const data = await response.json();
+        const businessCode = data.error?.code;
+        let errorMessage = 'Rate limit exceeded. ';
+
+        if (businessCode === '1302') {
+          errorMessage += 'High concurrency usage. CogView-4 has limit of 5 requests. Please wait 60 seconds.';
+        } else if (businessCode === '1303') {
+          errorMessage += 'High frequency usage. Please wait 60 seconds before trying again.';
+        } else if (businessCode === '1304') {
+          errorMessage += 'Daily call limit reached. Please try again tomorrow.';
+          setCooldownSeconds(3600); // 1 hour for daily limit
+        } else if (businessCode === '1308') {
+          errorMessage += 'Usage limit reached. Please wait before trying again.';
+        } else if (businessCode === '1309') {
+          errorMessage += 'GLM Coding Plan expired. Please renew at https://z.ai/subscribe';
+        } else {
+          errorMessage += 'CogView-4 has concurrency limit of 5 requests. Please wait 60 seconds.';
+        }
+
+        setResult(errorMessage);
         // Start countdown timer
-        setCooldownSeconds(60);
+        const cooldownTime = businessCode === '1304' ? 3600 : 60;
+        setCooldownSeconds(cooldownTime);
         const countdown = setInterval(() => {
           setCooldownSeconds((prev) => {
             if (prev <= 1) {
@@ -63,8 +83,38 @@ export default function Home() {
       }
 
       if (response.status === 401) {
-        setResult('Invalid API key. Please check your Z.AI API key.');
+        const data = await response.json();
+        const businessCode = data.error?.code;
+        let errorMessage = 'Authentication error. ';
+
+        if (businessCode === '1002') {
+          errorMessage += 'Authorization Token is invalid. Please check your API key.';
+        } else if (businessCode === '1003') {
+          errorMessage += 'Authorization Token expired. Please get a new API key.';
+        } else if (businessCode === '1113') {
+          errorMessage += 'Account is in arrears. Please recharge at https://z.ai/subscribe';
+        } else {
+          errorMessage += 'Invalid API key. Please check your Z.AI API key.';
+        }
+
+        setResult(errorMessage);
         setCanRequest(true); // Allow retry with correct API key
+        return;
+      }
+
+      if (response.status === 400) {
+        const data = await response.json();
+        const businessCode = data.error?.code;
+        let errorMessage = 'Parameter error. ';
+
+        if (businessCode === '1214') {
+          errorMessage += data.error.message || 'Invalid parameter provided.';
+        } else {
+          errorMessage += 'Please check your input parameters.';
+        }
+
+        setResult(errorMessage);
+        setCanRequest(true); // Allow retry for parameter errors
         return;
       }
 
@@ -75,6 +125,25 @@ export default function Home() {
       }
 
       const data = await response.json();
+
+      // Check for business errors even with 200 status
+      if (data.error) {
+        const businessCode = data.error.code;
+        let errorMessage = '';
+
+        if (businessCode === '1301') {
+          errorMessage = 'Content blocked: System detected potentially unsafe or sensitive content. Please modify your prompt.';
+        } else if (businessCode === '1300') {
+          errorMessage = 'API call blocked by policy. Please try a different approach.';
+        } else {
+          errorMessage = `Error: ${data.error.message}`;
+        }
+
+        setResult(errorMessage);
+        setCanRequest(true); // Allow retry for content policy errors
+        return;
+      }
+
       if (data.data && data.data[0] && data.data[0].url) {
         // Return image URL from Z.AI CogView-4
         setResult(data.data[0].url);
