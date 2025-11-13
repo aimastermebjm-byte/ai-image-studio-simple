@@ -18,25 +18,28 @@ export default function Home() {
     setResult('');
 
     try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' + apiKey, {
+      // Use Imagen 4.0 for actual image generation
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=' + apiKey, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `Generate a detailed image description for this prompt: "${prompt}". Return only the image description, nothing else.`
-            }]
-          }]
+          instances: [{
+            prompt: prompt
+          }],
+          parameters: {
+            sampleCount: 1
+          }
         }),
       });
 
       const data = await response.json();
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        setResult(data.candidates[0].content.parts[0].text);
+      if (data.predictions && data.predictions[0]) {
+        // Return base64 image data
+        setResult(data.predictions[0].generatedImage);
       } else {
-        setResult('Failed to generate image description');
+        setResult('Failed to generate image');
       }
     } catch (error) {
       console.error('Error:', error);
@@ -88,13 +91,21 @@ export default function Home() {
             disabled={loading || !prompt.trim() || !apiKey.trim()}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Generating...' : 'Generate Image Description'}
+            {loading ? 'Generating...' : 'Generate Image'}
           </button>
 
           {result && (
             <div className="mt-6 p-4 bg-gray-50 rounded-md">
-              <h3 className="font-semibold mb-2">Generated Image Description:</h3>
-              <p className="text-gray-700">{result}</p>
+              <h3 className="font-semibold mb-2">Generated Image:</h3>
+              {result.startsWith('data:image') ? (
+                <img
+                  src={result}
+                  alt="Generated image"
+                  className="w-full rounded-md shadow-md"
+                />
+              ) : (
+                <p className="text-gray-700">{result}</p>
+              )}
             </div>
           )}
         </div>
