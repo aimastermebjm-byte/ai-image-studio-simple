@@ -27,8 +27,8 @@ export default function Home() {
     setCanRequest(false);
 
     try {
-      // Add a small delay to prevent rapid requests
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Add longer delay to prevent rapid requests
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Use Z.AI CogView-4 API for image generation
       const response = await fetch('https://api.z.ai/api/paas/v4/images/generations', {
@@ -147,8 +147,8 @@ export default function Home() {
       if (data.data && data.data[0] && data.data[0].url) {
         // Return image URL from Z.AI CogView-4
         setResult(data.data[0].url);
-        // Add 5 second delay after successful generation to prevent rate limit
-        setCooldownSeconds(5);
+        // Add 15 second delay after successful generation to prevent rate limit
+        setCooldownSeconds(15);
         const countdown = setInterval(() => {
           setCooldownSeconds((prev) => {
             if (prev <= 1) {
@@ -205,8 +205,8 @@ export default function Home() {
               onChange={(e) => setQuality(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="standard">Standard (5-10 seconds)</option>
-              <option value="hd">HD Quality (20 seconds)</option>
+              <option value="standard">Standard (8-12 seconds)</option>
+              <option value="hd">HD Quality (20-25 seconds)</option>
             </select>
             <p className="text-xs text-gray-500">
               HD quality generates more detailed images but takes longer
@@ -253,7 +253,8 @@ export default function Home() {
         <div className="mt-8 text-center text-sm text-gray-500">
           <p>AI Image Studio Pro - Generate images with Z.AI CogView-4</p>
           <p>High-quality bilingual (Chinese/English) image generation</p>
-          <p className="mt-2 text-xs">Concurrency limit: 5 requests for CogView-4-250304</p>
+          <p className="mt-2 text-xs">⚡ 15 second cooldown between generations to prevent rate limits</p>
+          <p className="text-xs">Concurrency limit: 5 requests for CogView-4-250304</p>
         </div>
       </div>
     </div>
