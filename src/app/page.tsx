@@ -8,6 +8,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [quality, setQuality] = useState('standard');
+  const [canRequest, setCanRequest] = useState(true);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !apiKey.trim()) {
@@ -15,8 +16,14 @@ export default function Home() {
       return;
     }
 
+    if (!canRequest) {
+      alert('Please wait before making another request');
+      return;
+    }
+
     setLoading(true);
     setResult('');
+    setCanRequest(false);
 
     try {
       // Use Z.AI CogView-4 API for image generation
@@ -34,16 +41,38 @@ export default function Home() {
         }),
       });
 
+      if (response.status === 429) {
+        setResult('Rate limit exceeded. Please wait 30 seconds before trying again.');
+        // Enable request again after 30 seconds
+        setTimeout(() => setCanRequest(true), 30000);
+        return;
+      }
+
+      if (response.status === 401) {
+        setResult('Invalid API key. Please check your Z.AI API key.');
+        setCanRequest(true); // Allow retry with correct API key
+        return;
+      }
+
+      if (!response.ok) {
+        setResult(`API Error: ${response.status} - ${response.statusText}`);
+        setCanRequest(true); // Allow retry for other errors
+        return;
+      }
+
       const data = await response.json();
       if (data.data && data.data[0] && data.data[0].url) {
         // Return image URL from Z.AI CogView-4
         setResult(data.data[0].url);
+        setCanRequest(true); // Enable next request after success
       } else {
-        setResult('Failed to generate image: ' + (data.error?.message || 'Unknown error'));
+        setResult('Failed to generate image: ' + (data.error?.message || 'No image URL in response'));
+        setCanRequest(true); // Allow retry for failed generation
       }
     } catch (error) {
       console.error('Error:', error);
       setResult('Error generating image. Please check your API key.');
+      setCanRequest(true); // Allow retry for network errors
     } finally {
       setLoading(false);
     }
@@ -105,10 +134,10 @@ export default function Home() {
 
           <button
             onClick={handleGenerate}
-            disabled={loading || !prompt.trim() || !apiKey.trim()}
+            disabled={loading || !prompt.trim() || !apiKey.trim() || !canRequest}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Generating...' : 'Generate Image'}
+            {loading ? 'Generating...' : (!canRequest ? 'Please wait...' : 'Generate Image')}
           </button>
 
           {result && (
