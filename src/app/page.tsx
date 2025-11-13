@@ -46,7 +46,7 @@ export default function Home() {
       });
 
       if (response.status === 429) {
-        setResult('Rate limit exceeded. Please wait 60 seconds before trying again. Z.AI API limits requests per minute.');
+        setResult('Rate limit exceeded. CogView-4 has concurrency limit of 5 requests. Please wait 60 seconds before trying again.');
         // Start countdown timer
         setCooldownSeconds(60);
         const countdown = setInterval(() => {
@@ -184,6 +184,7 @@ export default function Home() {
         <div className="mt-8 text-center text-sm text-gray-500">
           <p>AI Image Studio Pro - Generate images with Z.AI CogView-4</p>
           <p>High-quality bilingual (Chinese/English) image generation</p>
+          <p className="mt-2 text-xs">Concurrency limit: 5 requests for CogView-4-250304</p>
         </div>
       </div>
     </div>
