@@ -9,6 +9,7 @@ export default function Home() {
   const [apiKey, setApiKey] = useState('');
   const [quality, setQuality] = useState('standard');
   const [canRequest, setCanRequest] = useState(true);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !apiKey.trim()) {
@@ -26,6 +27,9 @@ export default function Home() {
     setCanRequest(false);
 
     try {
+      // Add a small delay to prevent rapid requests
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Use Z.AI CogView-4 API for image generation
       const response = await fetch('https://api.z.ai/api/paas/v4/images/generations', {
         method: 'POST',
@@ -42,9 +46,19 @@ export default function Home() {
       });
 
       if (response.status === 429) {
-        setResult('Rate limit exceeded. Please wait 30 seconds before trying again.');
-        // Enable request again after 30 seconds
-        setTimeout(() => setCanRequest(true), 30000);
+        setResult('Rate limit exceeded. Please wait 60 seconds before trying again. Z.AI API limits requests per minute.');
+        // Start countdown timer
+        setCooldownSeconds(60);
+        const countdown = setInterval(() => {
+          setCooldownSeconds((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdown);
+              setCanRequest(true);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
         return;
       }
 
@@ -64,7 +78,18 @@ export default function Home() {
       if (data.data && data.data[0] && data.data[0].url) {
         // Return image URL from Z.AI CogView-4
         setResult(data.data[0].url);
-        setCanRequest(true); // Enable next request after success
+        // Add 5 second delay after successful generation to prevent rate limit
+        setCooldownSeconds(5);
+        const countdown = setInterval(() => {
+          setCooldownSeconds((prev) => {
+            if (prev <= 1) {
+              clearInterval(countdown);
+              setCanRequest(true);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
       } else {
         setResult('Failed to generate image: ' + (data.error?.message || 'No image URL in response'));
         setCanRequest(true); // Allow retry for failed generation
@@ -137,7 +162,7 @@ export default function Home() {
             disabled={loading || !prompt.trim() || !apiKey.trim() || !canRequest}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? 'Generating...' : (!canRequest ? 'Please wait...' : 'Generate Image')}
+            {loading ? 'Generating...' : (!canRequest ? `Please wait... (${cooldownSeconds}s)` : 'Generate Image')}
           </button>
 
           {result && (
