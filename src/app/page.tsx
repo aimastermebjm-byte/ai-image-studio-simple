@@ -55,7 +55,7 @@ export default function Home() {
         setApiTestResult(`❌ ${model.toUpperCase()} API Key test failed: ${data.error?.message || 'Invalid key'}`);
       }
     } catch (error) {
-      setApiTestResult(`❌ Network error: ${error.message}`);
+      setApiTestResult(`❌ Network error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
