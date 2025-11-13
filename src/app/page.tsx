@@ -7,6 +7,7 @@ export default function Home() {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [quality, setQuality] = useState('standard');
 
   const handleGenerate = async () => {
     if (!prompt.trim() || !apiKey.trim()) {
@@ -26,16 +27,17 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'cogView-4-250304',
+          model: 'cogview-4-250304',
           prompt: prompt,
-          size: '1024x1024'
+          size: '1024x1024',
+          quality: quality
         }),
       });
 
       const data = await response.json();
-      if (data.image_url) {
+      if (data.data && data.data[0] && data.data[0].url) {
         // Return image URL from Z.AI CogView-4
-        setResult(data.image_url);
+        setResult(data.data[0].url);
       } else {
         setResult('Failed to generate image: ' + (data.error?.message || 'Unknown error'));
       }
@@ -68,6 +70,23 @@ export default function Home() {
             />
             <p className="text-xs text-gray-500">
               Get your API key from <a href="https://z.ai" target="_blank" className="text-blue-500 hover:underline">Z.AI Platform</a>
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Image Quality
+            </label>
+            <select
+              value={quality}
+              onChange={(e) => setQuality(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="standard">Standard (5-10 seconds)</option>
+              <option value="hd">HD Quality (20 seconds)</option>
+            </select>
+            <p className="text-xs text-gray-500">
+              HD quality generates more detailed images but takes longer
             </p>
           </div>
 
