@@ -6,7 +6,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState('AIzaSyDwqr_Ayx05UVQZExxCaq1PVBU8OzHvFss');
   const [model, setModel] = useState('gemini'); // gemini, openai, huggingface
   const [quality, setQuality] = useState('standard');
   const [canRequest, setCanRequest] = useState(true);
