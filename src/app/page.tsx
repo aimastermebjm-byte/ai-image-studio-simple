@@ -7,37 +7,52 @@ export default function Home() {
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
-  const [model, setModel] = useState('openai'); // openai, stability, replicate
+  const [model, setModel] = useState('gemini'); // gemini, openai, huggingface
   const [quality, setQuality] = useState('standard');
   const [canRequest, setCanRequest] = useState(true);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const [apiTestResult, setApiTestResult] = useState('');
 
   const testApiKey = async () => {
+    if (model === 'huggingface') {
+      setApiTestResult('✅ HuggingFace uses free public models - no API key needed!');
+      return;
+    }
+
     if (!apiKey.trim()) {
       setApiTestResult('Please enter API key first');
       return;
     }
 
     try {
-      const response = await fetch('https://api.z.ai/api/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Bearer ' + apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'glm-4-flash',
-          messages: [{ role: 'user', content: 'test' }]
-        }),
-      });
+      let response;
+      if (model === 'gemini') {
+        // Test Gemini API with text generation
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Hello, test message' }] }]
+          }),
+        });
+      } else if (model === 'openai') {
+        response = await fetch('https://api.openai.com/v1/models', {
+          headers: {
+            'Authorization': 'Bearer ' + apiKey,
+          },
+        });
+      } else {
+        setApiTestResult('❌ API not implemented for testing');
+        return;
+      }
 
       if (response.ok) {
-        const data = await response.json();
-        setApiTestResult('✅ API Key is valid and has text generation access');
+        setApiTestResult(`✅ ${model.toUpperCase()} API Key is valid and has access`);
       } else {
         const data = await response.json();
-        setApiTestResult(`❌ API Key test failed: ${data.error?.message || 'Invalid key'}`);
+        setApiTestResult(`❌ ${model.toUpperCase()} API Key test failed: ${data.error?.message || 'Invalid key'}`);
       }
     } catch (error) {
       setApiTestResult(`❌ Network error: ${error.message}`);
@@ -45,8 +60,13 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
-    if (!prompt.trim() || !apiKey.trim()) {
-      alert('Please enter both prompt and API key');
+    if (!prompt.trim()) {
+      alert('Please enter a prompt');
+      return;
+    }
+
+    if (model !== 'huggingface' && !apiKey.trim()) {
+      alert('Please enter API key');
       return;
     }
 
@@ -66,7 +86,63 @@ export default function Home() {
       let response;
       let data;
 
-      if (model === 'openai') {
+      if (model === 'gemini') {
+        // Use Google Gemini Imagen API
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              responseModalities: ['IMAGE', 'TEXT'],
+              temperature: 0.4,
+              seed: Math.floor(Math.random() * 1000000)
+            }
+          }),
+        });
+
+        if (response.status === 429) {
+          setResult('Gemini rate limit exceeded. Please wait 60 seconds before trying again.');
+          setCooldownSeconds(60);
+          const countdown = setInterval(() => {
+            setCooldownSeconds((prev) => {
+              if (prev <= 1) {
+                clearInterval(countdown);
+                setCanRequest(true);
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          return;
+        }
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          setResult(`Gemini Error: ${errorData.error?.message || 'API request failed'}`);
+          setCanRequest(true);
+          return;
+        }
+
+        data = await response.json();
+        if (data.candidates && data.candidates[0]?.content?.parts) {
+          const imagePart = data.candidates[0].content.parts.find(part => part.inlineData);
+          if (imagePart && imagePart.inlineData && imagePart.inlineData.data) {
+            setResult(`data:image/png;base64,${imagePart.inlineData.data}`);
+            setCooldownSeconds(5);
+          } else {
+            setResult('No image generated. Please try a different prompt.');
+            setCanRequest(true);
+          }
+        } else {
+          setResult('Failed to generate image with Gemini Imagen 3.0');
+          setCanRequest(true);
+          return;
+        }
+
+      } else if (model === 'openai') {
         // Use OpenAI DALL-E 3 API
         response = await fetch('https://api.openai.com/v1/images/generations', {
           method: 'POST',
@@ -84,7 +160,7 @@ export default function Home() {
         });
 
         if (response.status === 429) {
-          setResult('Rate limit exceeded. Please wait 60 seconds before trying again.');
+          setResult('OpenAI rate limit exceeded. Please wait 60 seconds before trying again.');
           setCooldownSeconds(60);
           const countdown = setInterval(() => {
             setCooldownSeconds((prev) => {
@@ -118,7 +194,7 @@ export default function Home() {
 
       } else {
         // Fallback to other APIs or error
-        setResult(`${model.toUpperCase()} API not implemented yet. Please use OpenAI.`);
+        setResult(`${model.toUpperCase()} API not implemented yet.`);
         setCanRequest(true);
         return;
       }
@@ -160,40 +236,48 @@ export default function Home() {
               onChange={(e) => setModel(e.target.value)}
               className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
-              <option value="openai">OpenAI DALL-E 3 (Recommended)</option>
-              <option value="zai" disabled>Z.AI CogView-4 (Not Working)</option>
+              <option value="gemini">Google Gemini Imagen (Free)</option>
+              <option value="openai">OpenAI DALL-E 3 (Paid)</option>
+              <option value="huggingface">HuggingFace (Free - Coming Soon)</option>
             </select>
             <p className="text-xs text-gray-500">
-              OpenAI provides reliable image generation with consistent results
+              Google Gemini offers free image generation with Imagen 3.0
             </p>
           </div>
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700">
-              Your {model === 'openai' ? 'OpenAI' : 'Z.AI'} API Key
+              {model === 'huggingface' ? 'No API Key Needed' : `Your ${model === 'gemini' ? 'Google Gemini' : model === 'openai' ? 'OpenAI' : 'Z.AI'} API Key`}
             </label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={`Enter your ${model === 'openai' ? 'OpenAI' : 'Z.AI'} API key...`}
-              className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            {model !== 'huggingface' && (
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={`Enter your ${model === 'gemini' ? 'Google Gemini' : model === 'openai' ? 'OpenAI' : 'Z.AI'} API key...`}
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            )}
             <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={testApiKey}
-                className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
-              >
-                Test API Key
-              </button>
-              <a
-                href={model === 'openai' ? 'https://platform.openai.com/api-keys' : 'https://z.ai'}
-                target="_blank"
-                className="text-xs text-blue-500 hover:underline"
-              >
-                Get {model === 'openai' ? 'OpenAI' : 'Z.AI'} API key
-              </a>
+              {model !== 'huggingface' && (
+                <button
+                  type="button"
+                  onClick={testApiKey}
+                  className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded hover:bg-gray-200 transition-colors"
+                >
+                  Test API Key
+                </button>
+              )}
+              {model === 'gemini' && (
+                <a href="https://makersuite.google.com/app/apikey" target="_blank" className="text-xs text-blue-500 hover:underline">
+                  Get Gemini API Key
+                </a>
+              )}
+              {model === 'openai' && (
+                <a href="https://platform.openai.com/api-keys" target="_blank" className="text-xs text-blue-500 hover:underline">
+                  Get OpenAI API Key
+                </a>
+              )}
             </div>
             {apiTestResult && (
               <p className="text-xs p-2 rounded bg-gray-50" style={{ color: apiTestResult.includes('✅') ? '#059669' : '#dc2626' }}>
@@ -234,7 +318,7 @@ export default function Home() {
 
           <button
             onClick={handleGenerate}
-            disabled={loading || !prompt.trim() || !apiKey.trim() || !canRequest}
+            disabled={loading || !prompt.trim() || (model !== 'huggingface' && !apiKey.trim()) || !canRequest}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? 'Generating...' : (!canRequest ? `Please wait... (${cooldownSeconds}s)` : 'Generate Image')}
@@ -258,9 +342,9 @@ export default function Home() {
 
         <div className="mt-8 text-center text-sm text-gray-500">
           <p>AI Image Studio Pro - Generate images with multiple AI models</p>
-          <p>Professional image generation with OpenAI DALL-E 3 and more</p>
-          <p className="mt-2 text-xs">⚡ 10 second cooldown between generations to prevent rate limits</p>
-          <p className="text-xs">Using your own API key - pay only for what you use</p>
+          <p>Free image generation with Google Gemini Imagen 3.0</p>
+          <p className="mt-2 text-xs">⚡ 5 second cooldown between generations to prevent rate limits</p>
+          <p className="text-xs">Get your free Gemini API key and start generating images!</p>
         </div>
       </div>
     </div>
